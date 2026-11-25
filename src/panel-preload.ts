@@ -3,6 +3,10 @@ import { ipcRenderer, webFrame } from 'electron';
 const FRAME_MS = 33;
 const MASCOT_CANVAS = '[data-character] canvas';
 const MESSAGE_BOX = '[data-testid="messages-composer"] textarea';
+const MESSAGE_ROWS = '[data-testid="messages-thread"] [data-row-id]';
+const MESSAGE_CHECK_MS = 500;
+// Messages that load with the page are not new, so the first seconds after a load only record what is there.
+const MESSAGE_SETTLE_MS = 5000;
 const MAX_MASCOT_SIZE = 256;
 const PATCH_MS = 100;
 const POP_MS = 220;
@@ -142,5 +146,24 @@ ipcRenderer.on('panel:open', (_event, origin: Origin) => {
     document.querySelector<HTMLTextAreaElement>(MESSAGE_BOX)?.focus();
 });
 
+// Duet's own notifications never show here: it skips them while its page is visible, which the panel page always is, and they start from push messages that Electron cannot receive.
+// So this finds Duet's messages in the chat itself.
+const seenDuetMessages = new Set<string>();
+const loadedAt = Date.now();
+
+function checkForNewMessage(): void {
+    const rows = [...document.querySelectorAll<HTMLElement>(MESSAGE_ROWS)];
+    // The bubbles of one reply share the message id before the colon, as in cmsg_x:0 and cmsg_x:1.
+    const ids = rows.filter((row) => row.querySelector('[data-side="agent"]')).map((row) => (row.dataset.rowId ?? '').split(':')[0]);
+    const newest = rows.at(-1)?.querySelector('[data-side="agent"]') ? ids.at(-1) : undefined;
+    // A new message is the last row, below messages already seen. The last rows stay mounted while the user scrolls, and when no shown message was seen before, the thread has just loaded or changed conversation.
+    const isNew = newest !== undefined && !seenDuetMessages.has(newest) && ids.some((id) => seenDuetMessages.has(id));
+    ids.forEach((id) => seenDuetMessages.add(id));
+    if (isNew && Date.now() - loadedAt > MESSAGE_SETTLE_MS) {
+        ipcRenderer.send('duet:new-message');
+    }
+}
+
 void webFrame.executeJavaScript(KEEP_MASCOT_MOVING);
+setInterval(checkForNewMessage, MESSAGE_CHECK_MS);
 setInterval(sendMascotFrame, FRAME_MS);

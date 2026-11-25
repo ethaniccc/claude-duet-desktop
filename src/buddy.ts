@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen, type Point, type Rectangle, type WebContents } from 'electron';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { bringToFront, foregroundWindow, returnTo } from './foreground';
 
@@ -17,6 +18,9 @@ const BLUR_SETTLE_MS = 100;
 const ORB_RELOAD_DELAY_MS = 5000;
 const WAKE_MS = 250;
 const SHRINK_MS = 160;
+// Several Duet messages close together play one sound.
+const SOUND_GAP_MS = 3000;
+const SOUND_FILES = ['message.mp3', 'message.wav', 'message.ogg'];
 // The window hides a frame after the shrink ends, so the shrink's last frame is not cut off.
 const SHRINK_HIDE_MS = SHRINK_MS + 30;
 
@@ -25,6 +29,7 @@ let panel: BrowserWindow | null = null;
 let panelOpen = false;
 let hideTimer: NodeJS.Timeout | undefined;
 let previousWindow: number | null = null;
+let lastSoundAt = 0;
 let mascotFrame: unknown = null;
 let panelUrl = '';
 let setUpPanel: (contents: WebContents) => void = () => {};
@@ -338,6 +343,19 @@ function listenToOrb(): void {
             }
         });
     }
+
+    // The sound plays only when the user is not looking at the chat.
+    ipcMain.on('duet:new-message', (event) => {
+        const looking = panelOpen && BrowserWindow.getFocusedWindow() !== null;
+        if (!isPanel(event.sender) || looking || Date.now() - lastSoundAt < SOUND_GAP_MS) {
+            return;
+        }
+        const sound = SOUND_FILES.map((name) => path.join(__dirname, '..', 'sounds', name)).find((file) => existsSync(file));
+        if (sound && orb && !orb.isDestroyed()) {
+            lastSoundAt = Date.now();
+            orb.webContents.send('sound:play', pathToFileURL(sound).href);
+        }
+    });
 
     ipcMain.on('mascot:frame', (event, frame) => {
         if (isPanel(event.sender)) {

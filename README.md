@@ -63,6 +63,19 @@ You can open the chat while you use a different app, for example a game. This do
 
 Hold each Alt press for 0.4 seconds or less. The two Alt presses must be 0.4 seconds or less apart. If you press another key or a mouse button between the two presses, or while you hold Alt, the chat does not open. Thus Alt+Tab and Alt+F4 do not open the chat. On a keyboard with AltGr, use the left Alt.
 
+### Message sound
+
+The app can play a sound when Claude Duet sends you a message. The app plays the sound only when the chat is closed or when you use a different app.
+
+1. Make a folder with the name `sounds` in the `claude-duet-desktop` folder.
+2. Put your sound file in the `sounds` folder. Give it the name `message.mp3`, `message.wav`, or `message.ogg`.
+
+You do not have to start the app again. The app finds the file when a message comes in.
+
+The repository does not include a sound file. If the `sounds` folder has no sound file, the app plays no sound. If the folder has more than one sound file, the app uses `message.mp3` first, then `message.wav`, then `message.ogg`.
+
+When a message comes in several parts, the app plays the sound one time. After the app plays the sound, it does not play the sound again for 3 seconds. The app plays no sound for the first message from Claude Duet in a conversation that does not show other messages from Claude Duet.
+
 ### The system tray
 
 On Windows, the app shows a Claude icon in the system tray.

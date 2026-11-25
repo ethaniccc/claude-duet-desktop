@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('orb', {
     onMascotFrame: (callback: (frame: MascotFrame) => void) => {
         ipcRenderer.on('mascot:frame', (_event, frame: MascotFrame) => callback(frame));
     },
+    onPlaySound: (callback: (url: string) => void) => {
+        ipcRenderer.on('sound:play', (_event, url: string) => callback(url));
+    },
 });

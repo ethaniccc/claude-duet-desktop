@@ -19,6 +19,10 @@ window.orb.onMascotFrame((frame) => {
     mascotContext.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
 });
 
+window.orb.onPlaySound((url) => {
+    new Audio(url).play().catch((error) => console.error('Could not play the message sound', error));
+});
+
 let start = null;
 let dragging = false;
 
