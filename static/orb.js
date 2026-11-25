@@ -1,5 +1,24 @@
 const DRAG_THRESHOLD_PX = 4;
 const element = document.getElementById('orb');
+const logo = document.getElementById('logo');
+const mascot = document.getElementById('mascot');
+const mascotContext = mascot.getContext('2d');
+
+window.orb.onMascotFrame((frame) => {
+    mascot.hidden = !frame;
+    logo.hidden = Boolean(frame);
+    element.classList.toggle('mascot', Boolean(frame));
+    element.style.backgroundColor = frame ? frame.background : '';
+    if (!frame) {
+        return;
+    }
+    if (mascot.width !== frame.width || mascot.height !== frame.height) {
+        mascot.width = frame.width;
+        mascot.height = frame.height;
+    }
+    mascotContext.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
+});
+
 let start = null;
 let dragging = false;
 

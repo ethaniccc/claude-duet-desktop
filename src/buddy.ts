@@ -9,9 +9,12 @@ const PANEL_GAP = 8;
 const DRAG_FRAME_MS = 16;
 const BLUR_SETTLE_MS = 100;
 const ORB_RELOAD_DELAY_MS = 5000;
+const WAKE_MS = 250;
 
 let orb: BrowserWindow | null = null;
 let panel: BrowserWindow | null = null;
+let panelOpen = false;
+let mascotFrame: unknown = null;
 let panelUrl = '';
 let setUpPanel: (contents: WebContents) => void = () => {};
 let quitting = false;
@@ -100,6 +103,8 @@ function createOrb(): BrowserWindow {
         }
         setTimeout(() => window.isDestroyed() || window.reload(), ORB_RELOAD_DELAY_MS);
     });
+    // The panel sends a frame only when the mascot changes, so a reloaded orb gets the last one.
+    window.webContents.on('did-finish-load', () => window.webContents.send('mascot:frame', mascotFrame));
     void window.loadFile(path.join(__dirname, '..', 'static', 'orb.html'));
     window.once('ready-to-show', () => window.showInactive());
     return window;
@@ -117,7 +122,11 @@ function createPanel(): BrowserWindow {
         fullscreenable: false,
         skipTaskbar: true,
         alwaysOnTop: true,
+        // The orb shows the mascot that this page draws, so the page must keep drawing while the panel is hidden.
+        webPreferences: { preload: path.join(__dirname, 'panel-preload.js'), backgroundThrottling: false },
     });
+    window.webContents.on('did-finish-load', () => wakeClosedPanel(window));
+    window.webContents.on('render-process-gone', showLogoOnOrb);
 
     window.on('close', (event) => {
         if (!quitting) {
@@ -130,6 +139,8 @@ function createPanel(): BrowserWindow {
     window.on('closed', () => {
         if (panel === window) {
             panel = null;
+            panelOpen = false;
+            showLogoOnOrb();
         }
     });
 
@@ -138,12 +149,46 @@ function createPanel(): BrowserWindow {
     return window;
 }
 
+function sendToOrb(frame: unknown): void {
+    if (orb && !orb.isDestroyed()) {
+        orb.webContents.send('mascot:frame', frame);
+    }
+}
+
+function showLogoOnOrb(): void {
+    mascotFrame = null;
+    sendToOrb(null);
+}
+
+function offScreenBounds(): Rectangle {
+    const displays = screen.getAllDisplays();
+    const left = Math.min(...displays.map(({ bounds }) => bounds.x));
+    const top = Math.min(...displays.map(({ bounds }) => bounds.y));
+    return { x: left - PANEL_WIDTH - 100, y: top, width: PANEL_WIDTH, height: PANEL_HEIGHT };
+}
+
+// claude.ai draws nothing in a hidden window until the window has been shown since its page loaded, so a page that loads while the panel is closed is shown off every display for a moment.
+// Only on Windows: Wayland ignores the position and could flash the panel on screen, and macOS may not count an off-screen window as shown.
+function wakeClosedPanel(window: BrowserWindow): void {
+    if (panelOpen || process.platform !== 'win32') {
+        return;
+    }
+    window.setBounds(offScreenBounds());
+    window.showInactive();
+    setTimeout(() => {
+        if (!panelOpen && !window.isDestroyed()) {
+            window.hide();
+        }
+    }, WAKE_MS);
+}
+
 function descendants(window: BrowserWindow): BrowserWindow[] {
     return window.getChildWindows().flatMap((child) => [child, ...descendants(child)]);
 }
 
 // Popups belong to the always-on-top panel or to another popup, so they would stay on top of every app if they did not hide with it.
 function hidePanel(): void {
+    panelOpen = false;
     if (!panel) {
         return;
     }
@@ -158,6 +203,7 @@ function showPanel(): void {
         return;
     }
     panel ??= createPanel();
+    panelOpen = true;
     panel.setBounds(panelBounds(orb.getBounds()));
     panel.show();
     for (const child of descendants(panel)) {
@@ -167,7 +213,7 @@ function showPanel(): void {
 }
 
 function togglePanel(): void {
-    if (panel?.isVisible()) {
+    if (panelOpen) {
         hidePanel();
     } else {
         showPanel();
@@ -200,7 +246,7 @@ function startDrag(): void {
         last = point;
         // setPosition grows the window a little on each call on a scaled display, so give the size every time.
         orb.setBounds(orbBoundsAt(point.x - offset.x, point.y - offset.y));
-        if (panel?.isVisible()) {
+        if (panel && panelOpen) {
             panel.setBounds(panelBounds(orb.getBounds()));
         }
     }, DRAG_FRAME_MS);
@@ -213,7 +259,7 @@ function endDrag(): void {
     stopDrag();
     const bounds = keepOnScreen(orb.getBounds());
     orb.setBounds(bounds);
-    if (panel?.isVisible()) {
+    if (panel && panelOpen) {
         panel.setBounds(panelBounds(bounds));
     }
     saveOrbPosition(bounds);
@@ -232,6 +278,13 @@ function listenToOrb(): void {
             }
         });
     }
+
+    ipcMain.on('mascot:frame', (event, frame) => {
+        if (isPanel(event.sender)) {
+            mascotFrame = frame;
+            sendToOrb(frame);
+        }
+    });
 }
 
 // The panel hides once focus leaves every app window, including popups the panel opened.
