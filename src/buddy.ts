@@ -6,14 +6,23 @@ const ORB_SIZE = 72;
 const PANEL_WIDTH = 420;
 const PANEL_HEIGHT = 640;
 const PANEL_GAP = 8;
+const PANEL_RADIUS = 16;
+// Windows 10 does not round the corners of frameless windows, so the page is clipped to rounded corners inside a transparent window.
+// claude.ai puts its background on body, which the browser would paint over the whole window, so html gets an invisible background of its own and body is clipped instead.
+// The page's own scrollbar is hidden because it would draw square edges outside the rounded corners.
+const ROUNDED_PAGE_CSS = `html { background-color: rgba(0, 0, 0, 0.004) !important; scrollbar-width: none !important; } body { clip-path: inset(0 round ${PANEL_RADIUS}px) !important; }`;
 const DRAG_FRAME_MS = 16;
 const BLUR_SETTLE_MS = 100;
 const ORB_RELOAD_DELAY_MS = 5000;
 const WAKE_MS = 250;
+const SHRINK_MS = 160;
+// The window hides a frame after the shrink ends, so the shrink's last frame is not cut off.
+const SHRINK_HIDE_MS = SHRINK_MS + 30;
 
 let orb: BrowserWindow | null = null;
 let panel: BrowserWindow | null = null;
 let panelOpen = false;
+let hideTimer: NodeJS.Timeout | undefined;
 let mascotFrame: unknown = null;
 let panelUrl = '';
 let setUpPanel: (contents: WebContents) => void = () => {};
@@ -105,6 +114,7 @@ function createOrb(): BrowserWindow {
     });
     // The panel sends a frame only when the mascot changes, so a reloaded orb gets the last one.
     window.webContents.on('did-finish-load', () => window.webContents.send('mascot:frame', mascotFrame));
+    keepOnTop(window);
     void window.loadFile(path.join(__dirname, '..', 'static', 'orb.html'));
     window.once('ready-to-show', () => window.showInactive());
     return window;
@@ -122,10 +132,19 @@ function createPanel(): BrowserWindow {
         fullscreenable: false,
         skipTaskbar: true,
         alwaysOnTop: true,
+        transparent: true,
+        backgroundColor: '#00000000',
         // The orb shows the mascot that this page draws, so the page must keep drawing while the panel is hidden.
         webPreferences: { preload: path.join(__dirname, 'panel-preload.js'), backgroundThrottling: false },
     });
-    window.webContents.on('did-finish-load', () => wakeClosedPanel(window));
+    keepOnTop(window);
+    window.webContents.on('dom-ready', () => void window.webContents.insertCSS(ROUNDED_PAGE_CSS));
+    window.webContents.on('did-finish-load', () => {
+        if (!panelOpen) {
+            window.webContents.send('panel:closed', null, 0);
+        }
+        wakeClosedPanel(window);
+    });
     window.webContents.on('render-process-gone', showLogoOnOrb);
 
     window.on('close', (event) => {
@@ -173,6 +192,7 @@ function wakeClosedPanel(window: BrowserWindow): void {
     if (panelOpen || process.platform !== 'win32') {
         return;
     }
+    clearTimeout(hideTimer);
     window.setBounds(offScreenBounds());
     window.showInactive();
     setTimeout(() => {
@@ -182,30 +202,59 @@ function wakeClosedPanel(window: BrowserWindow): void {
     }, WAKE_MS);
 }
 
+// Electron puts an always-on-top window of the default level just behind the taskbar, so it falls out of the topmost band whenever the taskbar itself is not topmost; it does not do this for the 'screen-saver' level.
+function keepOnTop(window: BrowserWindow): void {
+    if (process.platform === 'win32') {
+        window.setAlwaysOnTop(true, 'screen-saver');
+    }
+}
+
 function descendants(window: BrowserWindow): BrowserWindow[] {
     return window.getChildWindows().flatMap((child) => [child, ...descendants(child)]);
 }
 
 // Popups belong to the always-on-top panel or to another popup, so they would stay on top of every app if they did not hide with it.
 function hidePanel(): void {
-    panelOpen = false;
-    if (!panel) {
+    if (!panelOpen || !panel) {
         return;
     }
+    panelOpen = false;
     for (const child of descendants(panel)) {
         child.hide();
     }
-    panel.hide();
+    const window = panel;
+    window.webContents.send('panel:closed', orbOrigin(window.getBounds()), SHRINK_MS);
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+        if (!panelOpen && !window.isDestroyed()) {
+            window.hide();
+        }
+    }, SHRINK_HIDE_MS);
+}
+
+// The orb's centre in the panel page's coordinates.
+function orbOrigin(panelArea: Rectangle): Point | null {
+    if (!orb || orb.isDestroyed()) {
+        return null;
+    }
+    const orbBounds = orb.getBounds();
+    return { x: orbBounds.x + orbBounds.width / 2 - panelArea.x, y: orbBounds.y + orbBounds.height / 2 - panelArea.y };
 }
 
 function showPanel(): void {
     if (!orb) {
         return;
     }
+    clearTimeout(hideTimer);
     panel ??= createPanel();
+    const opening = !panelOpen;
     panelOpen = true;
-    panel.setBounds(panelBounds(orb.getBounds()));
+    const bounds = panelBounds(orb.getBounds());
+    panel.setBounds(bounds);
     panel.show();
+    if (opening) {
+        panel.webContents.send('panel:open', orbOrigin(bounds));
+    }
     for (const child of descendants(panel)) {
         child.showInactive();
     }

@@ -4,6 +4,10 @@ const FRAME_MS = 33;
 const MASCOT_CANVAS = '[data-character] canvas';
 const MAX_MASCOT_SIZE = 256;
 const PATCH_MS = 100;
+const POP_MS = 220;
+// Ends exactly at full size: an overshoot would push the rounded corners past the window edge.
+const POP_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const SHRINK_EASING = 'cubic-bezier(0.7, 0, 0.84, 0)';
 
 // claude.ai stops the mascot once it is at rest while the page is unfocused, and the panel is unfocused whenever it is closed.
 // Faking focus would also tell the rest of the page and the server that the user is there, so this instead finds the mascot's drawing object through React's state on its canvas and makes it report that it is never at rest.
@@ -54,8 +58,7 @@ function mascotCanvas(): HTMLCanvasElement | null {
 
 // The orb takes the page background so it matches claude.ai's light or dark theme.
 function pageBackground(): string {
-    const body = getComputedStyle(document.body).backgroundColor;
-    return body === 'rgba(0, 0, 0, 0)' ? getComputedStyle(document.documentElement).backgroundColor : body;
+    return getComputedStyle(document.body).backgroundColor;
 }
 
 function sendNoMascot(): void {
@@ -87,6 +90,55 @@ function sendMascotFrame(): void {
     lastBackground = background;
     ipcRenderer.send('mascot:frame', { width: canvas.width, height: canvas.height, data, background });
 }
+
+type Origin = { x: number; y: number } | null;
+
+let closedHold: Animation | null = null;
+let motion: Animation | null = null;
+
+function poses(origin: Origin): { shrunk: Keyframe; full: Keyframe } {
+    if (!origin || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return { shrunk: { opacity: 0 }, full: { opacity: 1 } };
+    }
+    const transformOrigin = `${origin.x}px ${origin.y}px`;
+    return { shrunk: { opacity: 0, transform: 'scale(0.6)', transformOrigin }, full: { opacity: 1, transform: 'scale(1)', transformOrigin } };
+}
+
+// A pop or shrink that is still running is reversed from where it is now, so the page does not jump.
+function startPose(body: HTMLElement, fallback: Keyframe): Keyframe {
+    if (motion?.playState !== 'running') {
+        return fallback;
+    }
+    const style = getComputedStyle(body);
+    return { ...fallback, opacity: style.opacity, transform: style.transform };
+}
+
+function animateBody(body: HTMLElement, to: Keyframe, fallback: Keyframe, duration: number, easing: string, hidden: boolean): void {
+    const from = startPose(body, fallback);
+    motion?.cancel();
+    closedHold?.cancel();
+    // The page stays invisible while the panel is closed, so that opening the panel shows it popping out of the orb instead of appearing all at once.
+    closedHold = hidden ? body.animate([{ opacity: 0 }], { fill: 'forwards' }) : null;
+    motion = duration > 0 ? body.animate([from, to], { duration, easing }) : null;
+}
+
+ipcRenderer.on('panel:closed', (_event, origin: Origin, duration: number) => {
+    const body = document.body;
+    if (!body) {
+        return;
+    }
+    const { shrunk, full } = poses(origin);
+    animateBody(body, shrunk, full, duration, SHRINK_EASING, true);
+});
+
+ipcRenderer.on('panel:open', (_event, origin: Origin) => {
+    const body = document.body;
+    if (!body) {
+        return;
+    }
+    const { shrunk, full } = poses(origin);
+    animateBody(body, full, shrunk, POP_MS, POP_EASING, false);
+});
 
 void webFrame.executeJavaScript(KEEP_MASCOT_MOVING);
 setInterval(sendMascotFrame, FRAME_MS);
