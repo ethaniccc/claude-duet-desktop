@@ -2,6 +2,7 @@ import { ipcRenderer, webFrame } from 'electron';
 
 const FRAME_MS = 33;
 const MASCOT_CANVAS = '[data-character] canvas';
+const MESSAGE_BOX = '[data-testid="messages-composer"] textarea';
 const MAX_MASCOT_SIZE = 256;
 const PATCH_MS = 100;
 const POP_MS = 220;
@@ -138,6 +139,7 @@ ipcRenderer.on('panel:open', (_event, origin: Origin) => {
     }
     const { shrunk, full } = poses(origin);
     animateBody(body, full, shrunk, POP_MS, POP_EASING, false);
+    document.querySelector<HTMLTextAreaElement>(MESSAGE_BOX)?.focus();
 });
 
 void webFrame.executeJavaScript(KEEP_MASCOT_MOVING);

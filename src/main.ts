@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, nativeImage, session, shell, Tray, type NativeImage, type WebContents, type WindowOpenHandlerResponse } from 'electron';
 import path from 'node:path';
-import { createBuddy, isPanel, showBuddy, toggleOrb } from './buddy';
+import { createBuddy, isPanel, showBuddy, toggleChat, toggleOrb } from './buddy';
+import { onDoubleAlt, stopHotkey } from './hotkey';
 
 const DUET_URL = 'https://claude.ai/duet';
 const APP_HOST = 'claude.ai';
@@ -145,6 +146,8 @@ if (!app.requestSingleInstanceLock()) {
         restrictSession();
         createBuddy(DUET_URL, retryFailedLoads);
         createTray();
+        onDoubleAlt(toggleChat);
+        app.on('will-quit', stopHotkey);
         app.on('activate', showBuddy);
     });
 }

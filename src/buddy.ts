@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, type Point, type Rectangle, type WebContents } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { bringToFront, foregroundWindow, returnTo } from './foreground';
 
 const ORB_SIZE = 72;
 const PANEL_WIDTH = 420;
@@ -23,6 +24,7 @@ let orb: BrowserWindow | null = null;
 let panel: BrowserWindow | null = null;
 let panelOpen = false;
 let hideTimer: NodeJS.Timeout | undefined;
+let previousWindow: number | null = null;
 let mascotFrame: unknown = null;
 let panelUrl = '';
 let setUpPanel: (contents: WebContents) => void = () => {};
@@ -227,7 +229,11 @@ function hidePanel(): void {
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => {
         if (!panelOpen && !window.isDestroyed()) {
+            // Focus goes back to the window the user came from only when the app still has it, not when the user already clicked somewhere else.
+            const giveFocusTo = BrowserWindow.getFocusedWindow() ? previousWindow : null;
+            previousWindow = null;
             window.hide();
+            returnTo(giveFocusTo);
         }
     }, SHRINK_HIDE_MS);
 }
@@ -248,10 +254,15 @@ function showPanel(): void {
     clearTimeout(hideTimer);
     panel ??= createPanel();
     const opening = !panelOpen;
+    if (opening) {
+        // When the chat reopens during the shrink, the chat itself is in front, so the window it was first opened from is kept.
+        previousWindow = foregroundWindow() ?? previousWindow;
+    }
     panelOpen = true;
     const bounds = panelBounds(orb.getBounds());
     panel.setBounds(bounds);
     panel.show();
+    bringToFront(panel);
     if (opening) {
         panel.webContents.send('panel:open', orbOrigin(bounds));
     }
@@ -367,6 +378,14 @@ export function createBuddy(url: string, setUp: (contents: WebContents) => void)
 export function showBuddy(): void {
     orb?.showInactive();
     showPanel();
+}
+
+export function toggleChat(): void {
+    if (panelOpen) {
+        hidePanel();
+    } else {
+        showBuddy();
+    }
 }
 
 export function toggleOrb(): void {
