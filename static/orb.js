@@ -20,7 +20,7 @@ window.orb.onMascotFrame((frame) => {
 });
 
 window.orb.onPlaySound((url) => {
-    new Audio(url).play().catch((error) => console.error('Could not play the message sound', error));
+    new Audio(url).play().catch((error) => console.error('Could not play the sound', url, error));
 });
 
 let start = null;

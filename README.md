@@ -52,6 +52,7 @@ The orb floats above your other windows. It shows the animated Claude Duet chara
 - To move the orb, drag it. The app keeps the orb position for the next start.
 - To open the chat, click the orb. The chat comes out of the orb. It opens below the orb. If there is no space below, it opens above or next to the orb.
 - To close the chat, click the orb again or click outside the app. The chat goes back into the orb.
+- The app plays a short click sound when the chat opens and a different click sound when the chat closes.
 
 ### Open the chat with the keyboard
 
@@ -72,7 +73,7 @@ The app can play a sound when Claude Duet sends you a message. The app plays the
 
 You do not have to start the app again. The app finds the file when a message comes in.
 
-The repository does not include a sound file. If the `sounds` folder has no sound file, the app plays no sound. If the folder has more than one sound file, the app uses `message.mp3` first, then `message.wav`, then `message.ogg`.
+The repository does not include a message sound file. If the `sounds` folder has no sound file, the app plays no sound. If the folder has more than one sound file, the app uses `message.mp3` first, then `message.wav`, then `message.ogg`.
 
 When a message comes in several parts, the app plays the sound one time. After the app plays the sound, it does not play the sound again for 3 seconds. The app plays no sound for the first message from Claude Duet in a conversation that does not show other messages from Claude Duet.
 
