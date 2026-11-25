@@ -1,4 +1,6 @@
-import { app, BrowserWindow, session, shell, type WindowOpenHandlerResponse } from 'electron';
+import { app, BrowserWindow, Menu, nativeImage, session, shell, Tray, type NativeImage, type WebContents, type WindowOpenHandlerResponse } from 'electron';
+import path from 'node:path';
+import { createBuddy, isPanel, showBuddy, toggleOrb } from './buddy';
 
 const DUET_URL = 'https://claude.ai/duet';
 const APP_HOST = 'claude.ai';
@@ -9,8 +11,10 @@ const AUTH_HOSTS = new Set(['appleid.apple.com']);
 const GRANTED_PERMISSIONS = new Set(['notifications', 'media', 'clipboard-sanitized-write']);
 const BROWSER_PROTOCOLS = new Set(['https:', 'http:', 'mailto:']);
 const RETRY_DELAY_MS = 5000;
+const MAX_CRASH_DELAY_MS = 5 * 60 * 1000;
 
-let mainWindow: BrowserWindow | null = null;
+// Kept in a module variable so the tray icon is not garbage collected.
+let tray: Tray | null = null;
 
 function hostOf(url: string): string | null {
     if (!URL.canParse(url)) {
@@ -31,9 +35,10 @@ function openInBrowser(url: string): void {
     }
 }
 
-function routeWindowOpen({ url }: { url: string }): WindowOpenHandlerResponse {
+// A popup is a child of the window that opened it, so it shows above the always-on-top panel.
+function routeWindowOpen(opener: WebContents, url: string): WindowOpenHandlerResponse {
     if (staysInApp(url)) {
-        return { action: 'allow' };
+        return { action: 'allow', overrideBrowserWindowOptions: { parent: BrowserWindow.fromWebContents(opener) ?? undefined } };
     }
     openInBrowser(url);
     return { action: 'deny' };
@@ -44,33 +49,55 @@ function isAllowedPermission(permission: string, origin: string, mediaTypes: str
     return hostOf(origin) === APP_HOST && GRANTED_PERMISSIONS.has(permission) && audioOnly;
 }
 
-function createWindow(): void {
-    mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        title: 'Claude Duet',
-        autoHideMenuBar: true,
-    });
-
+function retryFailedLoads(contents: WebContents): void {
     let retryTimer: NodeJS.Timeout | undefined;
-    mainWindow.webContents.on('did-start-navigation', (event) => {
+    contents.on('did-start-navigation', (event) => {
         if (event.isMainFrame && !event.isSameDocument) {
             clearTimeout(retryTimer);
         }
     });
-    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _description, url, isMainFrame) => {
+    contents.on('did-fail-load', (_event, errorCode, _description, url, isMainFrame) => {
         const ERR_ABORTED = -3;
         if (isMainFrame && errorCode !== ERR_ABORTED) {
-            retryTimer = setTimeout(() => mainWindow?.loadURL(staysInApp(url) ? url : DUET_URL), RETRY_DELAY_MS);
+            retryTimer = setTimeout(() => contents.loadURL(staysInApp(url) ? url : DUET_URL), RETRY_DELAY_MS);
         }
     });
-
-    mainWindow.on('closed', () => {
+    // A page that crashes on every load is reloaded less and less often, and back at the normal delay once it has stayed up for 5 minutes.
+    let crashDelay = RETRY_DELAY_MS;
+    let reloadedAt = 0;
+    contents.on('render-process-gone', () => {
+        if (Date.now() - reloadedAt > MAX_CRASH_DELAY_MS) {
+            crashDelay = RETRY_DELAY_MS;
+        }
         clearTimeout(retryTimer);
-        mainWindow = null;
+        retryTimer = setTimeout(() => {
+            reloadedAt = Date.now();
+            contents.reload();
+        }, crashDelay);
+        crashDelay = Math.min(crashDelay * 2, MAX_CRASH_DELAY_MS);
     });
+    contents.on('destroyed', () => clearTimeout(retryTimer));
+}
 
-    void mainWindow.loadURL(DUET_URL);
+// Electron reads .ico files only on Windows.
+function trayIcon(): NativeImage | string {
+    const assets = path.join(__dirname, '..', 'assets');
+    if (process.platform === 'win32') {
+        return path.join(assets, 'claude.ico');
+    }
+    return nativeImage.createFromPath(path.join(assets, 'claude.png')).resize({ width: 16, height: 16 });
+}
+
+function createTray(): void {
+    tray = new Tray(trayIcon());
+    tray.setToolTip('Claude Duet');
+    tray.on('click', toggleOrb);
+    tray.setContextMenu(Menu.buildFromTemplate([
+        { label: 'Open Claude Duet', click: showBuddy },
+        { label: 'Show or hide the orb', click: toggleOrb },
+        { type: 'separator' },
+        { label: 'Quit', role: 'quit' },
+    ]));
 }
 
 function restrictSession(): void {
@@ -89,7 +116,7 @@ function restrictSession(): void {
 }
 
 app.on('web-contents-created', (_event, contents) => {
-    contents.setWindowOpenHandler(routeWindowOpen);
+    contents.setWindowOpenHandler(({ url }) => routeWindowOpen(contents, url));
 
     contents.on('will-navigate', (event) => {
         if (!staysInApp(event.url)) {
@@ -102,7 +129,7 @@ app.on('web-contents-created', (_event, contents) => {
         if (event.isMainFrame && !staysInApp(event.url)) {
             event.preventDefault();
             openInBrowser(event.url);
-            if (contents.getURL() === '' && contents !== mainWindow?.webContents) {
+            if (contents.getURL() === '' && !isPanel(contents)) {
                 contents.close();
             }
         }
@@ -112,31 +139,12 @@ app.on('web-contents-created', (_event, contents) => {
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
-    app.on('second-instance', () => {
-        if (!mainWindow) {
-            createWindow();
-            return;
-        }
-        if (mainWindow.isMinimized()) {
-            mainWindow.restore();
-        }
-        mainWindow.focus();
-    });
+    app.on('second-instance', showBuddy);
 
     app.whenReady().then(() => {
         restrictSession();
-        createWindow();
-
-        app.on('activate', () => {
-            if (BrowserWindow.getAllWindows().length === 0) {
-                createWindow();
-            }
-        });
-    });
-
-    app.on('window-all-closed', () => {
-        if (process.platform !== 'darwin') {
-            app.quit();
-        }
+        createBuddy(DUET_URL, retryFailedLoads);
+        createTray();
+        app.on('activate', showBuddy);
     });
 }
