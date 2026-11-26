@@ -2,11 +2,15 @@ import { app, BrowserWindow, ipcMain, screen, type Point, type Rectangle, type W
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { bringToFront, foregroundWindow, returnTo } from './foreground';
+import { bringToFront, foregroundWindow, raiseOnTop, returnTo } from './foreground';
 
 const ORB_SIZE = 72;
 const PANEL_WIDTH = 420;
 const PANEL_HEIGHT = 640;
+const MIN_PANEL_WIDTH = 340;
+const MIN_PANEL_HEIGHT = 460;
+const MAX_PANEL_WIDTH = 540;
+const MAX_PANEL_HEIGHT = 880;
 const PANEL_GAP = 8;
 const PANEL_RADIUS = 16;
 // Windows 10 does not round the corners of frameless windows, so the page is clipped to rounded corners inside a transparent window.
@@ -17,6 +21,7 @@ const DRAG_FRAME_MS = 16;
 const BLUR_SETTLE_MS = 100;
 const ORB_RELOAD_DELAY_MS = 5000;
 const WAKE_MS = 250;
+const RAISE_MS = 2000;
 const SHRINK_MS = 160;
 // Several Duet messages close together play one sound.
 const MESSAGE_SOUND_GAP_MS = 3000;
@@ -37,8 +42,20 @@ let panelUrl = '';
 let setUpPanel: (contents: WebContents) => void = () => {};
 let quitting = false;
 let dragTimer: NodeJS.Timeout | undefined;
+let resizeTimer: NodeJS.Timeout | undefined;
+let raiseTimer: NodeJS.Timeout | undefined;
+let panelSize = { width: PANEL_WIDTH, height: PANEL_HEIGHT };
+let sentGrip = '';
+let shownPlacement: Placement = 'below';
+
+type Size = { width: number; height: number };
+type Placement = 'below' | 'above' | 'right' | 'left';
+type Grip = { right: boolean; bottom: boolean };
+// unclamped is where the panel would sit before the screen edges and rounding move it.
+type PanelLayout = { bounds: Rectangle; grip: Grip; placement: Placement; unclamped: Rectangle };
 
 const positionFile = () => path.join(app.getPath('userData'), 'buddy.json');
+const sizeFile = () => path.join(app.getPath('userData'), 'panel.json');
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
@@ -74,29 +91,101 @@ function saveOrbPosition(bounds: Rectangle): void {
     }
 }
 
-// The panel opens below the orb, above it when there is no room below, and beside it when neither fits, so it does not cover the orb.
-function panelBounds(orbBounds: Rectangle): Rectangle {
-    const area = screen.getDisplayMatching(orbBounds).workArea;
-    const height = Math.min(PANEL_HEIGHT, area.height);
-    const below = orbBounds.y + orbBounds.height + PANEL_GAP;
-    const above = orbBounds.y - PANEL_GAP - height;
-    let x = orbBounds.x + orbBounds.width / 2 - PANEL_WIDTH / 2;
-    let y: number;
-    if (below + height <= area.y + area.height) {
-        y = below;
-    } else if (above >= area.y) {
-        y = above;
-    } else {
-        const right = orbBounds.x + orbBounds.width + PANEL_GAP;
-        x = right + PANEL_WIDTH <= area.x + area.width ? right : orbBounds.x - PANEL_GAP - PANEL_WIDTH;
-        y = orbBounds.y + orbBounds.height / 2 - height / 2;
+function loadPanelSize(): void {
+    try {
+        const { width, height } = JSON.parse(readFileSync(sizeFile(), 'utf8'));
+        if (Number.isFinite(width) && Number.isFinite(height)) {
+            panelSize = { width: Math.round(clamp(width, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH)), height: Math.round(clamp(height, MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT)) };
+        }
+    } catch {
+        // No saved size yet, or the file is unreadable: use the default.
     }
-    return {
-        x: Math.round(clamp(x, area.x, area.x + area.width - PANEL_WIDTH)),
-        y: Math.round(clamp(y, area.y, area.y + area.height - height)),
-        width: PANEL_WIDTH,
+}
+
+function savePanelSize(): void {
+    try {
+        writeFileSync(sizeFile(), JSON.stringify(panelSize));
+    } catch (error) {
+        console.error('Could not save the chat size', error);
+    }
+}
+
+// The panel opens below the orb, above it when there is no room below, and beside it when neither fits, so it does not cover the orb.
+function choosePlacement(orbBounds: Rectangle, size: Size, area: Rectangle): Placement {
+    if (orbBounds.y + orbBounds.height + PANEL_GAP + size.height <= area.y + area.height) {
+        return 'below';
+    }
+    if (orbBounds.y - PANEL_GAP - size.height >= area.y) {
+        return 'above';
+    }
+    const right = orbBounds.x + orbBounds.width + PANEL_GAP + size.width <= area.x + area.width;
+    if (right || orbBounds.x - PANEL_GAP - size.width >= area.x) {
+        return right ? 'right' : 'left';
+    }
+    return room('right', orbBounds, area).width >= room('left', orbBounds, area).width ? 'right' : 'left';
+}
+
+// The largest panel that fits on the given side of the orb.
+function room(placement: Placement, orbBounds: Rectangle, area: Rectangle): Size {
+    switch (placement) {
+        case 'below':
+            return { width: area.width, height: area.y + area.height - (orbBounds.y + orbBounds.height + PANEL_GAP) };
+        case 'above':
+            return { width: area.width, height: orbBounds.y - PANEL_GAP - area.y };
+        case 'right':
+            return { width: area.x + area.width - (orbBounds.x + orbBounds.width + PANEL_GAP), height: area.height };
+        case 'left':
+            return { width: orbBounds.x - PANEL_GAP - area.x, height: area.height };
+    }
+}
+
+function panelLayout(orbBounds: Rectangle, size: Size, area: Rectangle, placement = choosePlacement(orbBounds, size, area)): PanelLayout {
+    // On a small screen no side may have room for the saved size, so the panel is cut to the room on its side rather than cover the orb.
+    const space = room(placement, orbBounds, area);
+    const width = Math.max(1, Math.min(size.width, area.width, space.width));
+    const height = Math.max(1, Math.min(size.height, area.height, space.height));
+    const orbCentre = { x: orbBounds.x + orbBounds.width / 2, y: orbBounds.y + orbBounds.height / 2 };
+    const positions: Record<Placement, Point> = {
+        below: { x: orbCentre.x - width / 2, y: orbBounds.y + orbBounds.height + PANEL_GAP },
+        above: { x: orbCentre.x - width / 2, y: orbBounds.y - PANEL_GAP - height },
+        right: { x: orbBounds.x + orbBounds.width + PANEL_GAP, y: orbCentre.y - height / 2 },
+        left: { x: orbBounds.x - PANEL_GAP - width, y: orbCentre.y - height / 2 },
+    };
+    const bounds = {
+        x: Math.round(clamp(positions[placement].x, area.x, area.x + area.width - width)),
+        y: Math.round(clamp(positions[placement].y, area.y, area.y + area.height - height)),
+        width,
         height,
     };
+    // The resize grip sits on the corner away from the orb, on the side that a screen edge does not pin, so the panel can grow there.
+    const vertical = placement === 'below' || placement === 'above';
+    const grip = vertical
+        ? { right: bounds.x + width / 2 >= orbCentre.x, bottom: placement === 'below' }
+        : { right: placement === 'right', bottom: bounds.y + height / 2 >= orbCentre.y };
+    return { bounds, grip, placement, unclamped: { ...positions[placement], width, height } };
+}
+
+function placePanel(placement?: Placement): PanelLayout | null {
+    if (!orb || !panel) {
+        return null;
+    }
+    const orbBounds = orb.getBounds();
+    const layout = panelLayout(orbBounds, panelSize, screen.getDisplayMatching(orbBounds).workArea, placement);
+    panel.setBounds(layout.bounds);
+    shownPlacement = layout.placement;
+    const grip = JSON.stringify(layout.grip);
+    // During a resize the grip stays where the user holds it, even when a screen edge moves the free corner; it is placed again when the resize ends.
+    if (grip !== sentGrip && !resizeTimer) {
+        sentGrip = grip;
+        panel.webContents.send('panel:grip', layout.grip);
+    }
+    return layout;
+}
+
+// The grip in the page is new after a load or hidden after a close, so its corner is sent again.
+function placePanelAndGrip(placement?: Placement): PanelLayout | null {
+    sentGrip = '';
+    return placePanel(placement);
 }
 
 function createOrb(): BrowserWindow {
@@ -125,14 +214,16 @@ function createOrb(): BrowserWindow {
     window.webContents.on('did-finish-load', () => window.webContents.send('mascot:frame', mascotFrame));
     keepOnTop(window);
     void window.loadFile(path.join(__dirname, '..', 'static', 'orb.html'));
-    window.once('ready-to-show', () => window.showInactive());
+    window.once('ready-to-show', () => {
+        window.showInactive();
+        raiseOnTop(window);
+    });
     return window;
 }
 
 function createPanel(): BrowserWindow {
     const window = new BrowserWindow({
-        width: PANEL_WIDTH,
-        height: PANEL_HEIGHT,
+        ...panelSize,
         title: 'Claude Duet',
         show: false,
         frame: false,
@@ -148,13 +239,19 @@ function createPanel(): BrowserWindow {
     });
     keepOnTop(window);
     window.webContents.on('dom-ready', () => void window.webContents.insertCSS(ROUNDED_PAGE_CSS));
+    window.webContents.on('did-navigate', endResize);
     window.webContents.on('did-finish-load', () => {
-        if (!panelOpen) {
+        if (panelOpen) {
+            placePanelAndGrip();
+        } else {
             window.webContents.send('panel:closed', null, 0);
         }
         wakeClosedPanel(window);
     });
-    window.webContents.on('render-process-gone', showLogoOnOrb);
+    window.webContents.on('render-process-gone', () => {
+        endResize();
+        showLogoOnOrb();
+    });
 
     window.on('close', (event) => {
         if (!quitting) {
@@ -198,7 +295,7 @@ function offScreenBounds(): Rectangle {
     const displays = screen.getAllDisplays();
     const left = Math.min(...displays.map(({ bounds }) => bounds.x));
     const top = Math.min(...displays.map(({ bounds }) => bounds.y));
-    return { x: left - PANEL_WIDTH - 100, y: top, width: PANEL_WIDTH, height: PANEL_HEIGHT };
+    return { x: left - panelSize.width - 100, y: top, ...panelSize };
 }
 
 // claude.ai draws nothing in a hidden window until the window has been shown since its page loaded, so a page that loads while the panel is closed is shown off every display for a moment.
@@ -234,6 +331,7 @@ function hidePanel(): void {
         return;
     }
     panelOpen = false;
+    endResize();
     playSound(CLOSE_SOUND);
     for (const child of descendants(panel)) {
         child.hide();
@@ -273,9 +371,9 @@ function showPanel(): void {
         previousWindow = foregroundWindow() ?? previousWindow;
     }
     panelOpen = true;
-    const bounds = panelBounds(orb.getBounds());
-    panel.setBounds(bounds);
+    const bounds = placePanelAndGrip()?.bounds ?? panel.getBounds();
     panel.show();
+    raiseOnTop(panel);
     bringToFront(panel);
     if (opening) {
         playSound(OPEN_SOUND);
@@ -321,8 +419,8 @@ function startDrag(): void {
         last = point;
         // setPosition grows the window a little on each call on a scaled display, so give the size every time.
         orb.setBounds(orbBoundsAt(point.x - offset.x, point.y - offset.y));
-        if (panel && panelOpen) {
-            panel.setBounds(panelBounds(orb.getBounds()));
+        if (panelOpen) {
+            placePanel();
         }
     }, DRAG_FRAME_MS);
 }
@@ -334,10 +432,88 @@ function endDrag(): void {
     stopDrag();
     const bounds = keepOnScreen(orb.getBounds());
     orb.setBounds(bounds);
-    if (panel && panelOpen) {
-        panel.setBounds(panelBounds(bounds));
+    if (panelOpen) {
+        placePanel();
     }
     saveOrbPosition(bounds);
+}
+
+function stopResize(): void {
+    clearInterval(resizeTimer);
+    resizeTimer = undefined;
+}
+
+// The size that puts the grip corner nearest the point the user drags, for each axis in turn, with the panel kept on the side of the orb where the resize started.
+// Sizes that put the corner on the same pixel are told apart by where the corner would be before screen edges and rounding, so both ends can be reached and an edge does not snap the panel to the maximum.
+function sizeUnderCursor(orbBounds: Rectangle, area: Rectangle, placement: Placement, grip: Grip, target: Point): Size {
+    const space = room(placement, orbBounds, area);
+    const nearest = (min: number, max: number, current: number, distance: (value: number) => [number, number]): number => {
+        let best = max < min ? current : clamp(current, min, max);
+        let [bestDistance, bestUnclamped] = distance(best);
+        for (let value = min; value <= max; value++) {
+            const [valueDistance, valueUnclamped] = distance(value);
+            if (valueDistance < bestDistance || (valueDistance === bestDistance && valueUnclamped < bestUnclamped)) {
+                best = value;
+                bestDistance = valueDistance;
+                bestUnclamped = valueUnclamped;
+            }
+        }
+        return best;
+    };
+    const corner = (bounds: Rectangle) => ({ x: grip.right ? bounds.x + bounds.width : bounds.x, y: grip.bottom ? bounds.y + bounds.height : bounds.y });
+    const gripAt = (size: Size) => {
+        const { bounds, unclamped } = panelLayout(orbBounds, size, area, placement);
+        return { shown: corner(bounds), unclamped: corner(unclamped) };
+    };
+    const maxWidth = Math.min(MAX_PANEL_WIDTH, space.width);
+    const maxHeight = Math.min(MAX_PANEL_HEIGHT, space.height);
+    const width = nearest(MIN_PANEL_WIDTH, maxWidth, panelSize.width, (value) => {
+        const { shown, unclamped } = gripAt({ width: value, height: panelSize.height });
+        return [Math.abs(shown.x - target.x), Math.abs(unclamped.x - target.x)];
+    });
+    const height = nearest(MIN_PANEL_HEIGHT, maxHeight, panelSize.height, (value) => {
+        const { shown, unclamped } = gripAt({ width, height: value });
+        return [Math.abs(shown.y - target.y), Math.abs(unclamped.y - target.y)];
+    });
+    return { width, height };
+}
+
+// Windows cannot resize a transparent window from its edges, so the page has its own grip, and the app follows the cursor while the grip is dragged.
+function startResize(): void {
+    if (!orb || !panelOpen) {
+        return;
+    }
+    stopResize();
+    const orbBounds = orb.getBounds();
+    const area = screen.getDisplayMatching(orbBounds).workArea;
+    const { bounds, placement, grip } = panelLayout(orbBounds, panelSize, area, shownPlacement);
+    // The user holds the grip a few pixels inside the panel's corner, so the corner keeps that offset from the cursor.
+    const start = screen.getCursorScreenPoint();
+    const offset = { x: start.x - (grip.right ? bounds.x + bounds.width : bounds.x), y: start.y - (grip.bottom ? bounds.y + bounds.height : bounds.y) };
+    let last = start;
+    resizeTimer = setInterval(() => {
+        if (!orb || !panelOpen) {
+            endResize();
+            return;
+        }
+        const point = screen.getCursorScreenPoint();
+        if (point.x === last.x && point.y === last.y) {
+            return;
+        }
+        last = point;
+        panelSize = sizeUnderCursor(orbBounds, area, placement, grip, { x: point.x - offset.x, y: point.y - offset.y });
+        placePanel(placement);
+    }, DRAG_FRAME_MS);
+}
+
+function endResize(): void {
+    if (resizeTimer) {
+        stopResize();
+        savePanelSize();
+        if (panelOpen) {
+            placePanelAndGrip(shownPlacement);
+        }
+    }
 }
 
 function listenToOrb(): void {
@@ -367,12 +543,35 @@ function listenToOrb(): void {
         }
     });
 
+    ipcMain.on('panel:resize-start', (event) => {
+        if (isPanel(event.sender)) {
+            startResize();
+        }
+    });
+    ipcMain.on('panel:resize-end', (event) => {
+        if (isPanel(event.sender)) {
+            endResize();
+        }
+    });
+
     ipcMain.on('mascot:frame', (event, frame) => {
         if (isPanel(event.sender)) {
             mascotFrame = frame;
             sendToOrb(frame);
         }
     });
+}
+
+// Windows has left the orb marked always-on-top but stacked below normal windows even at the 'screen-saver' level, and other apps' always-on-top windows can cover it, so the visible orb and the open panel are put back on top on a timer.
+function keepRaised(): void {
+    raiseTimer = setInterval(() => {
+        if (orb && !orb.isDestroyed() && orb.isVisible()) {
+            raiseOnTop(orb);
+        }
+        if (panel && !panel.isDestroyed() && panelOpen) {
+            raiseOnTop(panel);
+        }
+    }, RAISE_MS);
 }
 
 // The panel hides once focus leaves every app window, including popups the panel opened.
@@ -393,18 +592,25 @@ export function isPanel(contents: WebContents): boolean {
 export function createBuddy(url: string, setUp: (contents: WebContents) => void): void {
     panelUrl = url;
     setUpPanel = setUp;
+    loadPanelSize();
     listenToOrb();
     hidePanelWhenAppLosesFocus();
+    keepRaised();
     orb = createOrb();
     panel = createPanel();
     app.on('before-quit', () => {
         quitting = true;
         stopDrag();
+        endResize();
+        clearInterval(raiseTimer);
     });
 }
 
 export function showBuddy(): void {
-    orb?.showInactive();
+    if (orb) {
+        orb.showInactive();
+        raiseOnTop(orb);
+    }
     showPanel();
 }
 
@@ -426,5 +632,6 @@ export function toggleOrb(): void {
         orb.hide();
     } else {
         orb.showInactive();
+        raiseOnTop(orb);
     }
 }

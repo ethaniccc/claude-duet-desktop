@@ -1,6 +1,10 @@
 import type { BrowserWindow } from 'electron';
 
 const SW_RESTORE = 9;
+const HWND_TOPMOST = -1;
+const SWP_NOSIZE = 0x1;
+const SWP_NOMOVE = 0x2;
+const SWP_NOACTIVATE = 0x10;
 const VK_F24 = 0x87;
 const KEYEVENTF_KEYUP = 0x2;
 const TASKBAR_CLASSES = new Set(['Shell_TrayWnd', 'Shell_SecondaryTrayWnd']);
@@ -14,6 +18,7 @@ type Api = {
     isWindow: (window: number) => number;
     isIconic: (window: number) => number;
     keybdEvent: (key: number, scan: number, flags: number, extra: number) => void;
+    setWindowPos: (window: number, after: number, x: number, y: number, width: number, height: number, flags: number) => number;
     currentThreadId: () => number;
 };
 
@@ -45,6 +50,7 @@ function load(): Api | null {
             isWindow: user.func('int __stdcall IsWindow(intptr_t hWnd)'),
             isIconic: user.func('int __stdcall IsIconic(intptr_t hWnd)'),
             keybdEvent: user.func('void __stdcall keybd_event(uint8_t bVk, uint8_t bScan, uint32_t dwFlags, uintptr_t dwExtraInfo)'),
+            setWindowPos: user.func('int __stdcall SetWindowPos(intptr_t hWnd, intptr_t hWndInsertAfter, int X, int Y, int cx, int cy, uint32_t uFlags)'),
             currentThreadId: kernel.func('uint32_t __stdcall GetCurrentThreadId()'),
         };
     } catch (error) {
@@ -81,6 +87,14 @@ export function foregroundWindow(): number | null {
         return null;
     }
     return front;
+}
+
+// Puts the window at the top of the always-on-top windows without giving it focus.
+export function raiseOnTop(window: BrowserWindow): void {
+    const api = load();
+    if (api && !window.isDestroyed()) {
+        api.setWindowPos(handleOf(window), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+    }
 }
 
 export function bringToFront(window: BrowserWindow): void {

@@ -52,6 +52,7 @@ The orb floats above your other windows. It shows the animated Claude Duet chara
 - To move the orb, drag it. The app keeps the orb position for the next start.
 - To open the chat, click the orb. The chat comes out of the orb. It opens below the orb. If there is no space below, it opens above or next to the orb.
 - To close the chat, click the orb again or click outside the app. The chat goes back into the orb.
+- To change the size of the chat, drag the grip in the corner of the chat that is away from the orb. The width can be from 340 to 540 pixels. The height can be from 460 to 880 pixels. On a small screen, the chat can be smaller. The app keeps the size for the next start.
 - The app plays a short click sound when the chat opens and a different click sound when the chat closes.
 
 ### Open the chat with the keyboard

@@ -12,6 +12,8 @@ const PATCH_MS = 100;
 const POP_MS = 220;
 // Ends exactly at full size: an overshoot would push the rounded corners past the window edge.
 const POP_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const GRIP_SIZE = 18;
+const GRIP_INSET = 4;
 const SHRINK_EASING = 'cubic-bezier(0.7, 0, 0.84, 0)';
 
 // claude.ai stops the mascot once it is at rest while the page is unfocused, and the panel is unfocused whenever it is closed.
@@ -127,7 +129,63 @@ function animateBody(body: HTMLElement, to: Keyframe, fallback: Keyframe, durati
     motion = duration > 0 ? body.animate([from, to], { duration, easing }) : null;
 }
 
+let grip: HTMLDivElement | null = null;
+
+function makeGrip(): HTMLDivElement {
+    const element = document.createElement('div');
+    const line = 'rgba(128, 128, 128, 0.6)';
+    element.style.cssText = `position: fixed; z-index: 2147483647; width: ${GRIP_SIZE}px; height: ${GRIP_SIZE}px; touch-action: none; opacity: 0.7;`
+        + `background: linear-gradient(135deg, transparent 52%, ${line} 52% 60%, transparent 60% 68%, ${line} 68% 76%, transparent 76% 84%, ${line} 84% 92%, transparent 92%);`;
+    let resizing = false;
+    const stop = () => {
+        if (resizing) {
+            resizing = false;
+            ipcRenderer.send('panel:resize-end');
+        }
+    };
+    element.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        element.setPointerCapture(event.pointerId);
+        resizing = true;
+        ipcRenderer.send('panel:resize-start');
+    });
+    element.addEventListener('pointerup', (event) => {
+        event.stopPropagation();
+        stop();
+    });
+    element.addEventListener('lostpointercapture', stop);
+    for (const type of ['click', 'contextmenu']) {
+        element.addEventListener(type, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        });
+    }
+    // On html, not body, so body's rounded clip and pop animation do not move or clip the grip.
+    document.documentElement.appendChild(element);
+    return element;
+}
+
+ipcRenderer.on('panel:grip', (_event, corner: { right: boolean; bottom: boolean }) => {
+    if (!grip?.isConnected) {
+        grip = makeGrip();
+    }
+    grip.style.display = '';
+    grip.style.top = corner.bottom ? '' : `${GRIP_INSET}px`;
+    grip.style.bottom = corner.bottom ? `${GRIP_INSET}px` : '';
+    grip.style.left = corner.right ? '' : `${GRIP_INSET}px`;
+    grip.style.right = corner.right ? `${GRIP_INSET}px` : '';
+    grip.style.cursor = corner.right === corner.bottom ? 'nwse-resize' : 'nesw-resize';
+    grip.style.transform = `scale(${corner.right ? 1 : -1}, ${corner.bottom ? 1 : -1})`;
+});
+
 ipcRenderer.on('panel:closed', (_event, origin: Origin, duration: number) => {
+    if (grip) {
+        grip.style.display = 'none';
+    }
     const body = document.body;
     if (!body) {
         return;
