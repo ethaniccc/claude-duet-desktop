@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, nativeImage, session, shell, Tray, type NativeImage, type WebContents, type WindowOpenHandlerResponse } from 'electron';
 import path from 'node:path';
 import { createBuddy, isPanel, showBuddy, toggleChat, toggleOrb } from './buddy';
+import { registerEmojiScheme, useAppleEmoji } from './emoji';
 import { onDoubleAlt, stopHotkey } from './hotkey';
 
 const DUET_URL = 'https://claude.ai/duet';
@@ -141,10 +142,14 @@ if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
     app.on('second-instance', showBuddy);
+    registerEmojiScheme();
 
     app.whenReady().then(() => {
         restrictSession();
-        createBuddy(DUET_URL, retryFailedLoads);
+        createBuddy(DUET_URL, (contents) => {
+            retryFailedLoads(contents);
+            useAppleEmoji(contents);
+        });
         createTray();
         onDoubleAlt(toggleChat);
         app.on('will-quit', stopHotkey);

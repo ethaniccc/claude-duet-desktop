@@ -78,6 +78,30 @@ The repository does not include a message sound file. If the `sounds` folder has
 
 When a message comes in several parts, the app plays the sound one time. After the app plays the sound, it does not play the sound again for 3 seconds. The app plays no sound for the first message from Claude Duet in a conversation that does not show other messages from Claude Duet.
 
+### Apple emoji
+
+The app can show emoji in the Apple style. You must get the emoji font from a Mac. The licence of the font does not let the repository include it. Make sure that the licence lets you use the font in this way.
+
+1. On the Mac, copy the file `/System/Library/Fonts/Apple Color Emoji.ttc` to the computer where you use the app.
+2. Install Python 3. Then install the tools that the script uses:
+
+   ```
+   python -m pip install fonttools uharfbuzz pillow
+   ```
+
+3. In the `claude-duet-desktop` folder, run the script with the path of your copy of the font:
+
+   ```
+   python scripts/apple-emoji.py "C:\path\to\Apple Color Emoji.ttc"
+   ```
+
+   The script downloads the list of emoji sequences from unicode.org. Then it writes the file `fonts/apple-emoji.ttf`.
+4. Start the app again.
+
+The app cannot use the Mac font as it is. The font is larger than 128 MB, which is the limit, and it joins emoji such as flags and skin tones in a format that the app cannot read. Thus the script makes the font smaller and writes the joins in a different format.
+
+If the `fonts` folder does not have the file `apple-emoji.ttf`, the app shows the emoji that it showed before. Keycap emoji, for example 1️⃣, do not change to the Apple style. Symbols that can be text or emoji, for example ↔ and ♥, stay as text. They change to the Apple style only when the emoji form of the symbol is used, for example ❤️.
+
 ### The system tray
 
 On Windows, the app shows a Claude icon in the system tray.
@@ -117,7 +141,7 @@ The page still knows when the chat does not have focus. But the page always repo
 
 ## Develop the app
 
-- The source is in `src/`. The orb page is in `static/`.
+- The source is in `src/`. The orb page is in `static/`. The script that makes the Apple emoji font is in `scripts/`.
 - `npm run build` compiles the TypeScript into `dist/`.
 - `npm start` compiles the TypeScript and starts the app.
 - The app does not reload when you change the code. Stop the app and start it again.

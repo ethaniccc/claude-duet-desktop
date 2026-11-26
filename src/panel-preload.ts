@@ -222,6 +222,23 @@ function checkForNewMessage(): void {
     }
 }
 
+// Sends the page's font faces, and again when fonts load, so the main process can add an Apple emoji copy of each.
+let sentFaces = '';
+
+function sendFontFaces(): void {
+    const faces = [...document.fonts].map(({ family, weight, style, stretch }) => ({ family, weight, style, stretch }));
+    const json = JSON.stringify(faces);
+    if (json !== sentFaces) {
+        sentFaces = json;
+        ipcRenderer.send('emoji:faces', faces);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', sendFontFaces);
+// 'loading' does not fire for a font that starts while another one loads, so 'loadingdone' catches that font.
+document.fonts.addEventListener('loading', sendFontFaces);
+document.fonts.addEventListener('loadingdone', sendFontFaces);
+
 void webFrame.executeJavaScript(KEEP_MASCOT_MOVING);
 setInterval(checkForNewMessage, MESSAGE_CHECK_MS);
 setInterval(sendMascotFrame, FRAME_MS);
