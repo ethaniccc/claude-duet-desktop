@@ -57,13 +57,17 @@ The orb floats above your other windows. It shows the animated Claude Duet chara
 
 ### Open the chat with the keyboard
 
-You can open the chat while you use a different app, for example a game. This does not work when the app in front runs as administrator.
+You can open the chat while you use a different app, for example a game. On Windows, this does not work when the app in front runs as administrator.
 
-1. Press Alt two times quickly. The chat opens, and the cursor goes to the message box.
+The key is Alt on Windows and Command on macOS.
+
+1. Press the key two times quickly. The chat opens, and the cursor goes to the message box.
 2. Type your message.
-3. Press Alt two times quickly again. The chat closes, and you go back to the window that you used before.
+3. Press the key two times quickly again. The chat closes, and you go back to the window that you used before.
 
-Hold each Alt press for 0.4 seconds or less. The two Alt presses must be 0.4 seconds or less apart. If you press another key or a mouse button between the two presses, or while you hold Alt, the chat does not open. Thus Alt+Tab and Alt+F4 do not open the chat. On a keyboard with AltGr, use the left Alt.
+Hold each press for 0.4 seconds or less. The two presses must be 0.4 seconds or less apart. If you press another key or a mouse button between the two presses, or while you hold the key, the chat does not open. Thus Alt+Tab and Command+Tab do not open the chat. On Windows, on a keyboard with AltGr, use the left Alt.
+
+On macOS, the app asks you to let it use Accessibility until you allow it. Open **System Settings** > **Privacy & Security** > **Accessibility** and turn on the app. When you start the app with `npm start`, turn on the terminal app that runs it. The keyboard works as soon as you turn it on. You do not have to start the app again.
 
 ### Message sound
 
@@ -124,7 +128,7 @@ The page still knows when the chat does not have focus. But the page always repo
 - Pages on `claude.ai` and the Apple sign-in pages open in the app.
 - Other `http`, `https`, and `mailto` links open in your default browser. This includes links on `claude.ai` that go to a different site.
 - Only `claude.ai` can show notifications, use the microphone, and write to the clipboard. The app refuses the camera and screen capture.
-- To find the double Alt press, the app listens to the keyboard and the mouse of the whole system. The library that the app uses always listens to both. The app uses only the Alt presses, and whether you pressed another key or a mouse button. It does not keep any key. Some antivirus programs show a warning for apps that listen to the keyboard in this way.
+- To find the double press, the app listens to the keyboard and the mouse of the whole system. The library that the app uses always listens to both. The app uses only the Alt or Command presses, and whether you pressed another key or a mouse button. It does not keep any key. Some antivirus programs show a warning for apps that listen to the keyboard in this way.
 - To give the keyboard to the chat, the app moves the Windows focus to the chat when the chat opens. When you close the chat with the keyboard or the orb, the app moves the focus back to your previous window. Each time the app moves the focus, it sends a press of the F24 key, which few apps use. If an app has a shortcut on F24, that app gets the press.
 
 ### Problems and how the app recovers

@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, nativeImage, session, shell, Tray, type Nativ
 import path from 'node:path';
 import { createBuddy, isPanel, showBuddy, toggleChat, toggleOrb } from './buddy';
 import { registerEmojiScheme, useAppleEmoji } from './emoji';
-import { onDoubleAlt, stopHotkey } from './hotkey';
+import { onDoubleTap, stopHotkey } from './hotkey';
 
 const DUET_URL = 'https://claude.ai/duet';
 const APP_HOST = 'claude.ai';
@@ -151,7 +151,7 @@ if (!app.requestSingleInstanceLock()) {
             useAppleEmoji(contents);
         });
         createTray();
-        onDoubleAlt(toggleChat);
+        onDoubleTap(toggleChat);
         app.on('will-quit', stopHotkey);
         app.on('activate', showBuddy);
     });
