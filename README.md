@@ -130,6 +130,7 @@ The page still knows when the chat does not have focus. But the page always repo
 - Only `claude.ai` can show notifications, use the microphone, and write to the clipboard. The app refuses the camera and screen capture.
 - To find the double press, the app listens to the keyboard and the mouse of the whole system. The library that the app uses always listens to both. The app uses only the Alt or Command presses, and whether you pressed another key or a mouse button. It does not keep any key. Some antivirus programs show a warning for apps that listen to the keyboard in this way.
 - To give the keyboard to the chat, the app moves the Windows focus to the chat when the chat opens. When you close the chat with the keyboard or the orb, the app moves the focus back to your previous window. Each time the app moves the focus, it sends a press of the F24 key, which few apps use. If an app has a shortcut on F24, that app gets the press.
+- On macOS, a click or a drag on the orb makes the app the active app. The app keeps track of the last other app that was active. When you close the chat, or when you drag the orb while the chat is closed, the app makes that app active again.
 
 ### Problems and how the app recovers
 

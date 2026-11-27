@@ -434,6 +434,9 @@ function endDrag(): void {
     orb.setBounds(bounds);
     if (panelOpen) {
         placePanel();
+    } else if (process.platform === 'darwin') {
+        // A drag on the orb makes this app the front app, so the keyboard goes back to the app the user was in.
+        returnTo(foregroundWindow());
     }
     saveOrbPosition(bounds);
 }

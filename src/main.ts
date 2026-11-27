@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createBuddy, isPanel, showBuddy, toggleChat, toggleOrb } from './buddy';
 import { registerEmojiScheme, useAppleEmoji } from './emoji';
 import { onDoubleTap, stopHotkey } from './hotkey';
+import { trackFrontApp } from './mac-focus';
 
 const DUET_URL = 'https://claude.ai/duet';
 const APP_HOST = 'claude.ai';
@@ -146,6 +147,7 @@ if (!app.requestSingleInstanceLock()) {
 
     app.whenReady().then(() => {
         restrictSession();
+        trackFrontApp();
         createBuddy(DUET_URL, (contents) => {
             retryFailedLoads(contents);
             useAppleEmoji(contents);

@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron';
+import { previousApp, returnToApp } from './mac-focus';
 
 const SW_RESTORE = 9;
 const HWND_TOPMOST = -1;
@@ -77,7 +78,11 @@ function activate(api: Api, target: number): void {
 }
 
 // The window in front now, or null when it is one of ours, the taskbar, or the focus functions are not available.
+// On macOS, the process id of the last other app in front.
 export function foregroundWindow(): number | null {
+    if (process.platform === 'darwin') {
+        return previousApp();
+    }
     const api = load();
     if (!api) {
         return null;
@@ -105,6 +110,10 @@ export function bringToFront(window: BrowserWindow): void {
 }
 
 export function returnTo(handle: number | null): void {
+    if (process.platform === 'darwin') {
+        returnToApp(handle);
+        return;
+    }
     const api = load();
     if (!api || !handle || !api.isWindow(handle)) {
         return;
