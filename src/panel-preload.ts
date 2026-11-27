@@ -134,15 +134,29 @@ let grip: HTMLDivElement | null = null;
 function makeGrip(): HTMLDivElement {
     const element = document.createElement('div');
     const line = 'rgba(128, 128, 128, 0.6)';
-    element.style.cssText = `position: fixed; z-index: 2147483647; width: ${GRIP_SIZE}px; height: ${GRIP_SIZE}px; touch-action: none; opacity: 0.7;`
+    element.style.cssText = `position: fixed; z-index: 2147483647; width: ${GRIP_SIZE}px; height: ${GRIP_SIZE}px; touch-action: none; opacity: 0; transition: opacity 120ms;`
         + `background: linear-gradient(135deg, transparent 52%, ${line} 52% 60%, transparent 60% 68%, ${line} 68% 76%, transparent 76% 84%, ${line} 84% 92%, transparent 92%);`;
     let resizing = false;
+    let hovered = false;
+    // The grip shows only under the cursor or during a resize, so its lines do not sit on top of the page's own buttons in that corner.
+    const show = () => {
+        element.style.opacity = hovered || resizing ? '0.7' : '0';
+    };
     const stop = () => {
         if (resizing) {
             resizing = false;
+            show();
             ipcRenderer.send('panel:resize-end');
         }
     };
+    element.addEventListener('pointerenter', () => {
+        hovered = true;
+        show();
+    });
+    element.addEventListener('pointerleave', () => {
+        hovered = false;
+        show();
+    });
     element.addEventListener('pointerdown', (event) => {
         if (event.button !== 0) {
             return;
@@ -151,6 +165,7 @@ function makeGrip(): HTMLDivElement {
         event.stopPropagation();
         element.setPointerCapture(event.pointerId);
         resizing = true;
+        show();
         ipcRenderer.send('panel:resize-start');
     });
     element.addEventListener('pointerup', (event) => {
@@ -185,6 +200,7 @@ ipcRenderer.on('panel:grip', (_event, corner: { right: boolean; bottom: boolean 
 ipcRenderer.on('panel:closed', (_event, origin: Origin, duration: number) => {
     if (grip) {
         grip.style.display = 'none';
+        grip.style.opacity = '0';
     }
     const body = document.body;
     if (!body) {
