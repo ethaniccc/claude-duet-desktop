@@ -71,14 +71,16 @@ On macOS, the app asks you to let it use Accessibility until you allow it. Open 
 
 ### Message sound
 
-The app can play a sound when Claude Duet sends you a message. The app plays the sound only when the chat is closed or when you use a different app.
+The app plays a sound when Claude Duet sends you a message. The app plays the sound only when the chat is closed or when you use a different app.
+
+To use a different sound:
 
 1. Make a folder with the name `sounds` in the `claude-duet-desktop` folder.
 2. Put your sound file in the `sounds` folder. Give it the name `message.mp3`, `message.wav`, or `message.ogg`.
 
 You do not have to start the app again. The app finds the file when a message comes in.
 
-The repository does not include a message sound file. If the `sounds` folder has no sound file, the app plays no sound. If the folder has more than one sound file, the app uses `message.mp3` first, then `message.wav`, then `message.ogg`.
+If the `sounds` folder has no sound file, the app plays its own sound, `assets/sounds/message.mp3`. If the folder has more than one sound file, the app uses `message.mp3` first, then `message.wav`, then `message.ogg`.
 
 When a message comes in several parts, the app plays the sound one time. After the app plays the sound, it does not play the sound again for 3 seconds. The app plays no sound for the first message from Claude Duet in a conversation that does not show other messages from Claude Duet.
 

@@ -26,6 +26,7 @@ const SHRINK_MS = 160;
 // Several Duet messages close together play one sound.
 const MESSAGE_SOUND_GAP_MS = 3000;
 const MESSAGE_SOUND_FILES = ['message.mp3', 'message.wav', 'message.ogg'];
+const DEFAULT_MESSAGE_SOUND = path.join(__dirname, '..', 'assets', 'sounds', 'message.mp3');
 const OPEN_SOUND = path.join(__dirname, '..', 'assets', 'sounds', 'open.wav');
 const CLOSE_SOUND = path.join(__dirname, '..', 'assets', 'sounds', 'close.wav');
 // The window hides a frame after the shrink ends, so the shrink's last frame is not cut off.
@@ -542,11 +543,9 @@ function listenToOrb(): void {
         if (!isPanel(event.sender) || looking || Date.now() - lastMessageSoundAt < MESSAGE_SOUND_GAP_MS) {
             return;
         }
-        const sound = MESSAGE_SOUND_FILES.map((name) => path.join(__dirname, '..', 'sounds', name)).find((file) => existsSync(file));
-        if (sound) {
-            lastMessageSoundAt = Date.now();
-            playSound(sound);
-        }
+        const sound = MESSAGE_SOUND_FILES.map((name) => path.join(__dirname, '..', 'sounds', name)).find((file) => existsSync(file)) ?? DEFAULT_MESSAGE_SOUND;
+        lastMessageSoundAt = Date.now();
+        playSound(sound);
     });
 
     ipcMain.on('panel:resize-start', (event) => {
