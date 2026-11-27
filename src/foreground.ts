@@ -77,8 +77,7 @@ function activate(api: Api, target: number): void {
     api.setForegroundWindow(target);
 }
 
-// The window in front now, or null when it is one of ours, the taskbar, or the focus functions are not available.
-// On macOS, the process id of the last other app in front.
+// The window in front now, or null when it is one of ours, the taskbar, or the focus functions are not available. On macOS, the process id of the last other app in front.
 export function foregroundWindow(): number | null {
     if (process.platform === 'darwin') {
         return previousApp();

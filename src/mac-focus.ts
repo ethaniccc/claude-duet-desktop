@@ -22,26 +22,29 @@ export function trackFrontApp(): void {
         const sendWithPointer = objc.func('objc_msgSend', 'void *', ['void *', 'void *', 'void *']);
         const sendWithString = objc.func('objc_msgSend', 'void *', ['void *', 'void *', 'const char *']);
         const sendWithInt = objc.func('objc_msgSend', 'void *', ['void *', 'void *', 'int']);
-        const sendWithLong = objc.func('objc_msgSend', 'bool', ['void *', 'void *', 'uint64_t']);
+        const sendWithUInt64 = objc.func('objc_msgSend', 'bool', ['void *', 'void *', 'uint64_t']);
         const addObserver = objc.func('objc_msgSend', 'void', ['void *', 'void *', 'void *', 'void *', 'void *', 'void *']);
 
         const nsString = (text: string) => sendWithString(getClass('NSString'), selector('stringWithUTF8String:'), text);
         const remember = (app: unknown) => {
-            const pid = app ? sendGetInt(app, selector('processIdentifier')) : process.pid;
+            if (!app) {
+                return;
+            }
+            const pid = sendGetInt(app, selector('processIdentifier'));
             if (pid !== process.pid) {
                 lastOtherApp = pid;
             }
         };
+        const observerClass = allocateClass(getClass('NSObject'), 'DuetActivationObserver', 0);
+        if (!observerClass) {
+            throw new Error('The class DuetActivationObserver already exists');
+        }
         const workspace = send(getClass('NSWorkspace'), selector('sharedWorkspace'));
         remember(send(workspace, selector('frontmostApplication')));
 
         const onActivation = koffi.register((_self: unknown, _cmd: unknown, notification: unknown) => {
             remember(sendWithPointer(send(notification, selector('userInfo')), selector('objectForKey:'), nsString('NSWorkspaceApplicationKey')));
         }, koffi.pointer(Handler));
-        const observerClass = allocateClass(getClass('NSObject'), 'DuetActivationObserver', 0);
-        if (!observerClass) {
-            throw new Error('The class DuetActivationObserver already exists');
-        }
         addMethod(observerClass, selector('appActivated:'), onActivation, 'v@:@');
         registerClass(observerClass);
         const observer = send(send(observerClass, selector('alloc')), selector('init'));
@@ -50,7 +53,7 @@ export function trackFrontApp(): void {
         activateApp = (pid) => {
             const app = sendWithInt(getClass('NSRunningApplication'), selector('runningApplicationWithProcessIdentifier:'), pid);
             if (app) {
-                sendWithLong(app, selector('activateWithOptions:'), 0);
+                sendWithUInt64(app, selector('activateWithOptions:'), 0);
             }
         };
     } catch (error) {
