@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { bringToFront, foregroundWindow, raiseOnTop, returnTo } from './foreground';
+import { moveToActiveDesktop } from './mac-desktop';
 
 const ORB_SIZE = 72;
 const PANEL_WIDTH = 420;
@@ -235,10 +236,16 @@ function createPanel(): BrowserWindow {
         alwaysOnTop: true,
         transparent: true,
         backgroundColor: '#00000000',
+        // On macOS a panel takes the keyboard without making the app active, so opening the chat does not switch the user to another desktop.
+        ...(process.platform === 'darwin' ? { type: 'panel' } : {}),
         // The orb shows the mascot that this page draws, so the page must keep drawing while the panel is hidden.
         webPreferences: { preload: path.join(__dirname, 'panel-preload.js'), backgroundThrottling: false },
     });
-    keepOnTop(window);
+    if (process.platform === 'darwin') {
+        moveToActiveDesktop(window);
+    } else {
+        keepOnTop(window);
+    }
     window.webContents.on('dom-ready', () => void window.webContents.insertCSS(ROUNDED_PAGE_CSS));
     window.webContents.on('did-navigate', endResize);
     window.webContents.on('did-finish-load', () => {
@@ -316,7 +323,7 @@ function wakeClosedPanel(window: BrowserWindow): void {
 }
 
 // On Windows, Electron puts an always-on-top window of the default level just behind the taskbar, so it falls out of the topmost band whenever the taskbar itself is not topmost; it does not do this for the 'screen-saver' level.
-// On macOS the windows show on every desktop and over full-screen apps, such as a game. The app hides its Dock icon at start, so Electron does not switch the process type here, which would hide the windows and the Dock for a moment on each call.
+// On macOS the orb shows on every desktop and over full-screen apps, such as a game. The app hides its Dock icon at start, so Electron does not switch the process type here, which would hide the windows and the Dock for a moment on each call.
 function keepOnTop(window: BrowserWindow): void {
     if (process.platform === 'win32') {
         window.setAlwaysOnTop(true, 'screen-saver');
