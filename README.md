@@ -7,7 +7,7 @@ Claude Duet Desktop is an unofficial desktop app for [Claude Duet](https://claud
 You must have these items:
 
 - A Claude account that has access to Claude Duet. Claude Duet is a research preview. For the current access rules, see [the Claude Duet page](https://claude.com/duet).
-- Windows 10 or later. We build and test the app only on Windows. Some parts can work on macOS and Linux, but we did not test them.
+- Windows 10 or later, or macOS 13 or later. We build and test the app on Windows and macOS. Some parts can work on Linux, but we did not test them.
 - [Node.js](https://nodejs.org/) 22.12 or later.
 - [Git](https://git-scm.com/).
 
@@ -47,7 +47,7 @@ The app keeps you signed in after you quit it.
 
 ### The orb
 
-The orb floats above your other windows. It shows the animated Claude Duet character from the chat page. When the chat page does not show the character, the orb shows the Claude logo. For example, the orb shows the logo before you sign in.
+The orb floats above your other windows. On macOS, the orb and the chat also show on every desktop and above full-screen apps. The orb shows the animated Claude Duet character from the chat page. When the chat page does not show the character, the orb shows the Claude logo. For example, the orb shows the logo before you sign in.
 
 - To move the orb, drag it. The app keeps the orb position for the next start.
 - To open the chat, click the orb. The chat comes out of the orb. It opens below the orb. If there is no space below, it opens above or next to the orb.
@@ -84,6 +84,8 @@ When a message comes in several parts, the app plays the sound one time. After t
 
 ### Apple emoji
 
+On macOS, the chat already shows emoji in the Apple style, so you can skip this section.
+
 The app can show emoji in the Apple style. You must get the emoji font from a Mac. The licence of the font does not let the repository include it. Make sure that the licence lets you use the font in this way.
 
 1. On the Mac, copy the file `/System/Library/Fonts/Apple Color Emoji.ttc` to the computer where you use the app.
@@ -106,14 +108,16 @@ The app cannot use the Mac font as it is. The font is larger than 128 MB, which 
 
 If the `fonts` folder does not have the file `apple-emoji.ttf`, the app shows the emoji that it showed before. Keycap emoji, for example 1️⃣, do not change to the Apple style. Symbols that can be text or emoji, for example ↔ and ♥, stay as text. They change to the Apple style only when the emoji form of the symbol is used, for example ❤️.
 
-### The system tray
+### The system tray and the menu bar
 
-On Windows, the app shows a Claude icon in the system tray.
+On Windows, the app shows a Claude icon in the system tray. On macOS, the app shows the icon in the menu bar, and it has no icon in the Dock.
 
-- To hide or show the orb, click the icon.
-- To see the commands, right-click the icon. The commands are: open the chat, show or hide the orb, and quit the app.
+- On Windows, to hide or show the orb, click the icon. To see the commands, right-click the icon.
+- On macOS, to see the commands, click the icon.
 
-When you hide the chat or the orb, the app continues to run. To stop the app, click **Quit** in the tray menu.
+The commands are: open the chat, show or hide the orb, and quit the app.
+
+When you hide the chat or the orb, the app continues to run. To stop the app, click **Quit** in the menu of the icon.
 
 ## How the app works
 
@@ -129,7 +133,7 @@ The page still knows when the chat does not have focus. But the page always repo
 - Other `http`, `https`, and `mailto` links open in your default browser. This includes links on `claude.ai` that go to a different site.
 - Only `claude.ai` can show notifications, use the microphone, and write to the clipboard. The app refuses the camera and screen capture.
 - To find the double press, the app listens to the keyboard and the mouse of the whole system. The library that the app uses always listens to both. The app uses only the Alt or Command presses, and whether you pressed another key or a mouse button. It does not keep any key. Some antivirus programs show a warning for apps that listen to the keyboard in this way.
-- To give the keyboard to the chat, the app moves the Windows focus to the chat when the chat opens. When you close the chat with the keyboard or the orb, the app moves the focus back to your previous window. Each time the app moves the focus, it sends a press of the F24 key, which few apps use. If an app has a shortcut on F24, that app gets the press.
+- On Windows, to give the keyboard to the chat, the app moves the Windows focus to the chat when the chat opens. When you close the chat with the keyboard or the orb, the app moves the focus back to your previous window. Each time the app moves the focus, it sends a press of the F24 key, which few apps use. If an app has a shortcut on F24, that app gets the press.
 - On macOS, a click or a drag on the orb makes the app the active app. The app keeps track of the last other app that was active. When you close the chat, or when you drag the orb while the chat is closed, the app makes that app active again.
 
 ### Problems and how the app recovers

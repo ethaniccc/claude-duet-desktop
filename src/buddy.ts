@@ -314,10 +314,13 @@ function wakeClosedPanel(window: BrowserWindow): void {
     }, WAKE_MS);
 }
 
-// Electron puts an always-on-top window of the default level just behind the taskbar, so it falls out of the topmost band whenever the taskbar itself is not topmost; it does not do this for the 'screen-saver' level.
+// On Windows, Electron puts an always-on-top window of the default level just behind the taskbar, so it falls out of the topmost band whenever the taskbar itself is not topmost; it does not do this for the 'screen-saver' level.
+// On macOS the windows show on every desktop and over full-screen apps, such as a game. The app hides its Dock icon at start, so Electron does not switch the process type here, which would hide the windows and the Dock for a moment on each call.
 function keepOnTop(window: BrowserWindow): void {
     if (process.platform === 'win32') {
         window.setAlwaysOnTop(true, 'screen-saver');
+    } else if (process.platform === 'darwin') {
+        window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     }
 }
 

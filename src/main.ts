@@ -94,7 +94,10 @@ function trayIcon(): NativeImage | string {
 function createTray(): void {
     tray = new Tray(trayIcon());
     tray.setToolTip('Claude Duet');
-    tray.on('click', toggleOrb);
+    // On macOS a click on a menu bar icon opens its menu, and Electron also fires 'click' for that click.
+    if (process.platform !== 'darwin') {
+        tray.on('click', toggleOrb);
+    }
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Open Claude Duet', click: showBuddy },
         { label: 'Show or hide the orb', click: toggleOrb },
@@ -147,6 +150,8 @@ if (!app.requestSingleInstanceLock()) {
 
     app.whenReady().then(() => {
         restrictSession();
+        // Like the hidden taskbar button on Windows, the app has no Dock icon on macOS, and the menu bar icon has its commands. macOS also shows the orb and the chat over full-screen apps only for an app with no Dock icon.
+        app.dock?.hide();
         trackFrontApp();
         createBuddy(DUET_URL, (contents) => {
             retryFailedLoads(contents);
