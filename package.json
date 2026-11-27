@@ -6,9 +6,11 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
-    "start": "tsc && electron ."
+    "start": "tsc && electron .",
+    "install-mac": "tsc && node scripts/install-mac.mjs"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "electron": "^45.5.0",
     "typescript": "^7.0.2"
   },

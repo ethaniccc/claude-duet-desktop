@@ -43,6 +43,26 @@ You must have these items:
 
 The app keeps you signed in after you quit it.
 
+## Install the app on macOS
+
+On macOS, you can install the app in the Applications folder. Then you can open it from Spotlight.
+
+1. If the app runs, quit it.
+2. In the `claude-duet-desktop` folder, run:
+
+   ```sh
+   npm run install-mac
+   ```
+
+   The script builds `Claude Duet Desktop.app` and copies it to the Applications folder.
+3. Open Spotlight, type `Claude Duet Desktop`, and press Return.
+
+The installed app and `npm start` use the same sign-in. Only one of them can run at a time.
+
+The installed app does not read the `sounds` and `fonts` folders in the `claude-duet-desktop` folder.
+
+After you install the app again, macOS can ask again for the Accessibility permission. If the keyboard does not open the chat, remove **Claude Duet Desktop** from the Accessibility list, and turn it on again.
+
 ## Use the app
 
 ### The orb
@@ -67,7 +87,7 @@ The key is Alt on Windows and Command on macOS.
 
 Hold each press for 0.4 seconds or less. The two presses must be 0.4 seconds or less apart. If you press another key or a mouse button between the two presses, or while you hold the key, the chat does not open. Thus Alt+Tab and Command+Tab do not open the chat. On Windows, on a keyboard with AltGr, use the left Alt.
 
-On macOS, the app asks you to let it use Accessibility until you allow it. Open **System Settings** > **Privacy & Security** > **Accessibility** and turn on the app. When you start the app with `npm start`, turn on the terminal app that runs it. The keyboard works as soon as you turn it on. You do not have to start the app again.
+On macOS, the app asks you to let it use Accessibility until you allow it. Open **System Settings** > **Privacy & Security** > **Accessibility** and turn on the app. For the installed app, turn on **Claude Duet Desktop**. When you start the app with `npm start`, turn on the terminal app that runs it. The keyboard works as soon as you turn it on. You do not have to start the app again.
 
 ### Message sound
 
@@ -152,7 +172,7 @@ The page still knows when the chat does not have focus. But the page always repo
 
 ## Develop the app
 
-- The source is in `src/`. The orb page is in `static/`. The script that makes the Apple emoji font is in `scripts/`.
+- The source is in `src/`. The orb page is in `static/`. The script that makes the Apple emoji font and the script that installs the macOS app are in `scripts/`. The app icon is `assets/icon.svg`. After you change it, run `scripts/make-icon.sh` on a Mac to make `assets/icon.icns` again.
 - `npm run build` compiles the TypeScript into `dist/`.
 - `npm start` compiles the TypeScript and starts the app.
 - The app does not reload when you change the code. Stop the app and start it again.
