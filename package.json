@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "start": "tsc && electron .",
-    "install-mac": "tsc && node scripts/install-mac.mjs"
+    "install-mac": "tsc && node scripts/install-mac.mjs",
+    "install-windows": "tsc && node scripts/install-windows.mjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

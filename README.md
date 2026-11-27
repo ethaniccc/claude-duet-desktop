@@ -63,6 +63,28 @@ The installed app does not read the `sounds` and `fonts` folders in the `claude-
 
 After you install the app again, macOS can ask again for the Accessibility permission. If the keyboard does not open the chat, remove **Claude Duet Desktop** from the Accessibility list, and turn it on again.
 
+## Install the app on Windows
+
+On Windows, you can install the app for your user account. Then you can open it from the Start menu. You do not have to be an administrator.
+
+1. If the app runs, quit it. Right-click the Claude icon in the system tray, and click **Quit**. The icon can be under the ^ arrow in the taskbar.
+2. In the `claude-duet-desktop` folder, run:
+
+   ```sh
+   npm run install-windows
+   ```
+
+   The script builds the app and copies it to `%LOCALAPPDATA%\Programs\Claude Duet Desktop`. It also adds **Claude Duet Desktop** to the Start menu.
+3. Open the Start menu, type `Claude Duet Desktop`, and press Enter.
+
+The installed app and `npm start` use the same sign-in. Only one of them can run at a time.
+
+The script copies `fonts/apple-emoji.ttf` into the app, if the file is there. If you make the font later, run the script again. The installed app does not read the `sounds` folder in the `claude-duet-desktop` folder.
+
+To get a new version of the code, quit the app, and run `git pull`, `npm install`, and `npm run install-windows`.
+
+To remove the app, delete the `%LOCALAPPDATA%\Programs\Claude Duet Desktop` folder and the shortcut `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Claude Duet Desktop.lnk`. Your sign-in stays in `%APPDATA%\claude-duet-desktop`.
+
 ## Use the app
 
 ### The orb
@@ -172,7 +194,7 @@ The page still knows when the chat does not have focus. But the page always repo
 
 ## Develop the app
 
-- The source is in `src/`. The orb page is in `static/`. The script that makes the Apple emoji font and the script that installs the macOS app are in `scripts/`. The app icon is `assets/icon.svg`. After you change it, run `scripts/make-icon.sh` on a Mac to make `assets/icon.icns` again.
+- The source is in `src/`. The orb page is in `static/`. The script that makes the Apple emoji font and the scripts that install the macOS and Windows apps are in `scripts/`. The app icon is `assets/icon.svg`. After you change it, run `scripts/make-icon.sh` on a Mac to make `assets/icon.icns` again, and run `npx electron scripts/make-icon-windows.mjs` to make `assets/icon.ico` again.
 - `npm run build` compiles the TypeScript into `dist/`.
 - `npm start` compiles the TypeScript and starts the app.
 - The app does not reload when you change the code. Stop the app and start it again.
