@@ -112,19 +112,14 @@ function savePanelSize(): void {
     }
 }
 
-// The panel opens below the orb, above it when there is no room below, and beside it when neither fits, so it does not cover the orb.
+// The panel opens beside the orb, on the wider side, when a left or right screen edge is nearer to the orb than the top and bottom edges, and below or above it otherwise.
+// It tries the other sides when it does not fit, and takes the wider side when it fits nowhere.
 function choosePlacement(orbBounds: Rectangle, size: Size, area: Rectangle): Placement {
-    if (orbBounds.y + orbBounds.height + PANEL_GAP + size.height <= area.y + area.height) {
-        return 'below';
-    }
-    if (orbBounds.y - PANEL_GAP - size.height >= area.y) {
-        return 'above';
-    }
-    const right = orbBounds.x + orbBounds.width + PANEL_GAP + size.width <= area.x + area.width;
-    if (right || orbBounds.x - PANEL_GAP - size.width >= area.x) {
-        return right ? 'right' : 'left';
-    }
-    return room('right', orbBounds, area).width >= room('left', orbBounds, area).width ? 'right' : 'left';
+    const space = (placement: Placement) => room(placement, orbBounds, area);
+    const beside: Placement[] = space('right').width >= space('left').width ? ['right', 'left'] : ['left', 'right'];
+    const nearSide = Math.min(space('left').width, space('right').width) < Math.min(space('above').height, space('below').height);
+    const order: Placement[] = nearSide ? [...beside, 'below', 'above'] : ['below', 'above', ...beside];
+    return order.find((placement) => space(placement).width >= size.width && space(placement).height >= size.height) ?? beside[0];
 }
 
 // The largest panel that fits on the given side of the orb.
